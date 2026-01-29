@@ -2,7 +2,7 @@
 
 ## Technical Requirements
 
-- Engine: `Unity`
+- Engine: `Unity`, version: `6.0`
 - Repository: `github`
 - CI/CD: `github action`
 
@@ -14,6 +14,11 @@
 - Obstacles will be randomly generated infront of the dinosaur.
 - Game over once dinosaur hit any obstacle.
 - Camera follows the dinosaur.
+
+## Game controls
+
+- Space/up arrow to jump
+
 
 ## Art Requirements
 
