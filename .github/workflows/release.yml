@@ -11,15 +11,29 @@ jobs:
     env:
       S3_BUCKET: ${{ secrets.S3_BUCKET }}
       AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+      UNITY_VERSION: 6000.0.0f1
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Run unit tests
-        run: make test
+        uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          projectPath: .
+          unityVersion: ${{ env.UNITY_VERSION }}
 
       - name: Build WebGL package
-        run: scripts/build_webgl.sh build/webgl
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+        with:
+          projectPath: .
+          unityVersion: ${{ env.UNITY_VERSION }}
+          targetPlatform: WebGL
+          buildName: DinoRunner
+          buildPath: build/webgl
 
       - name: Upload WebGL build to S3
         if: env.S3_BUCKET != ''
