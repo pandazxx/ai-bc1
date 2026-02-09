@@ -101,11 +101,42 @@ No title screen in M0. Player is in the action immediately on launch.
 | Space / Up Arrow (press) | Reset and restart, only after 0.3s cooldown |
 
 Rules:
+- **Fixed jump** -- every jump is identical. No variable height based on hold duration. Revisit for M1 if obstacle variety demands it.
 - **Fresh press only** -- holding the key does not repeat jump. Must release and press again.
 - **No input buffering** -- pressing jump before landing does not queue the jump.
 - **Restart cooldown** -- 0.3s delay in DEAD state before restart input is accepted. Prevents accidental restart from mashing jump.
 
-### 3. Data Structures
+### 3. Physics Engine
+
+**Integration method:** Euler integration (sufficient for simple platformer physics).
+
+**Per-frame update:**
+```
+velocityY += gravity * deltaTime
+playerY   += velocityY * deltaTime
+if (playerY >= groundY) → clamp to ground, set grounded = true
+```
+
+All physics uses `deltaTime` (`GetFrameTime()`) for frame-rate independence.
+
+**Constants (starting values, subject to tuning):**
+
+| Constant | Value | Notes |
+|---|---|---|
+| **gravity** | 1200 u/s² | Downward acceleration |
+| **jumpVelocity** | -500 u/s | Instant upward velocity on jump |
+
+**Derived characteristics:**
+
+| Property | Value |
+|---|---|
+| Time to apex | ~0.42s |
+| Jump height | ~104 px |
+| Total airtime | ~0.84s |
+
+These are starting points. Final feel is determined during the tuning pass.
+
+### 4. Data Structures
 
 > TODO: structs vs loose variables, what fields each needs
 
@@ -148,6 +179,12 @@ Rules:
 - Fresh press only, no hold-to-repeat jump.
 - No input buffering (no queued jumps before landing).
 - 0.3s cooldown in DEAD state before restart input accepted.
+
+### 2026-02-09 -- Physics and jump model
+- **Fixed jump** for M0. Every jump has the same arc. Variable jump (hold for height) deferred to M1 if needed.
+- **Euler integration** for physics. Simple, sufficient for this game.
+- Gravity 1200 u/s², jump velocity -500 u/s as starting values, subject to tuning.
+- All physics frame-rate independent via `deltaTime`.
 
 ### 2026-02-09 -- Documentation structure
 - **CLAUDE.md** for repo conventions, build commands, technical context (how to work here).
