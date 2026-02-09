@@ -14,6 +14,7 @@ ai-bc1/
 ├── AGENT_REQUIREMENTS.md            # AI agent behavior rules
 ├── CICD_REQUIREMENTS.md             # CI/CD specifications
 ├── CONVERSATION_HISTORY.md          # Log of past agent conversations
+├── DESIGN.md                        # Game design doc, milestones, and decision log
 ├── README.md                        # Project readme
 ├── CLAUDE.md                        # This file
 └── .gitkeep
@@ -105,9 +106,16 @@ From `AGENT_REQUIREMENTS.md`:
 - **Collision:** Raylib `CheckCollisionRecs()` between player and obstacle rectangles
 - **Ground line:** Drawn at `screenHeight - 120` pixels from top
 
+## Key Documentation
+
+- **CLAUDE.md** (this file) -- repo conventions, build commands, technical context. How to work here.
+- **DESIGN.md** -- game design, milestones, feature specs, decision log. What we're building and why.
+- **CONVERSATION_HISTORY.md** -- raw session logs per agent requirements.
+
 ## Working with This Repo
 
 1. **Restoring deleted files:** All source files exist in git history. Use `git show <commit>:<path>` or `git checkout <commit> -- <path>` to restore them (e.g., `git checkout 0a0ae48 -- main.c Makefile tests/ scripts/`).
-2. **Adding new features:** Keep the single-file approach for game logic unless complexity warrants splitting. Add tests in `tests/` using `<assert.h>`.
+2. **Adding new features:** Keep the single-file approach for game logic unless complexity warrants splitting. Add tests in `tests/` using `<assert.h>`. Check `DESIGN.md` for current milestone scope before starting work.
 3. **Releases:** Tag with `release/<version>` to trigger the CI/CD pipeline.
 4. **Conversation logging:** After each session, append a dated summary to `CONVERSATION_HISTORY.md`.
+5. **Design decisions:** When making or changing design decisions, update the Decision Log in `DESIGN.md`.
