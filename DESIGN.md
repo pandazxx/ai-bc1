@@ -69,6 +69,66 @@ Milestones are a guide, not a contract. Feedback after each one determines what 
 7. WebGL build -- ensure build_webgl.sh produces a working browser build
 8. Tests -- basic assertions for game logic
 
+## M0 Low-Level Design
+
+### 1. Game States & Flow
+
+Two states only. Game starts directly in PLAYING -- no title screen.
+
+```
+PLAYING ──(collision)──► DEAD ──(Space/Up after cooldown)──► PLAYING
+```
+
+| State | Behavior |
+|---|---|
+| **PLAYING** | Player runs, obstacles scroll, score counts up, jump input accepted |
+| **DEAD** | Everything frozen in place. Show final score + best score. Accept restart after 0.3s cooldown |
+
+No title screen in M0. Player is in the action immediately on launch.
+
+### 2. User Interaction
+
+**PLAYING state:**
+
+| Input | Action |
+|---|---|
+| Space / Up Arrow (press) | Jump, only when grounded |
+
+**DEAD state:**
+
+| Input | Action |
+|---|---|
+| Space / Up Arrow (press) | Reset and restart, only after 0.3s cooldown |
+
+Rules:
+- **Fresh press only** -- holding the key does not repeat jump. Must release and press again.
+- **No input buffering** -- pressing jump before landing does not queue the jump.
+- **Restart cooldown** -- 0.3s delay in DEAD state before restart input is accepted. Prevents accidental restart from mashing jump.
+
+### 3. Data Structures
+
+> TODO: structs vs loose variables, what fields each needs
+
+### 4. Frame Loop
+
+> TODO: per-state frame logic, input/update/render order
+
+### 5. Score & Difficulty
+
+> TODO: score formula, speed ramp curve, plateau behavior
+
+### 6. High Score Storage
+
+> TODO: native file I/O, WebGL localStorage, error handling
+
+### 7. Rendering & Layout
+
+> TODO: draw order, screen positions, text placement, colors
+
+### 8. WebGL Considerations
+
+> TODO: Emscripten main loop, build flags, localStorage API
+
 ## Decision Log
 
 ### 2026-02-09 -- Project approach
@@ -79,6 +139,15 @@ Milestones are a guide, not a contract. Feedback after each one determines what 
 - **WebGL build moved to M0** (was M5). Rationale: instant browser playtesting enables the feedback loop that drives the whole approach.
 - **High score save moved to M0** (was M1). Rationale: gives players a reason to retry; cheap to implement.
 - Single obstacle type only in M0 -- gameplay depth comes in M1 with ducking and flying obstacles.
+
+### 2026-02-09 -- Game states
+- Two states only: PLAYING and DEAD. No title screen.
+- Game starts directly in PLAYING on launch (like Chrome dino).
+
+### 2026-02-09 -- User interaction
+- Fresh press only, no hold-to-repeat jump.
+- No input buffering (no queued jumps before landing).
+- 0.3s cooldown in DEAD state before restart input accepted.
 
 ### 2026-02-09 -- Documentation structure
 - **CLAUDE.md** for repo conventions, build commands, technical context (how to work here).
