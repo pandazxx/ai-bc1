@@ -288,6 +288,112 @@ This means game logic must be refactored into a single `GameFrame()` function th
 
 **Output:** `build/webgl/` directory containing `index.html`, `index.js`, `index.wasm`. Deployable to S3 as static files.
 
+## M1 Spec -- "Depth"
+
+**Goal:** Transform the one-trick timing game into a read-and-react game. The player now makes decisions: jump or duck.
+
+### Features
+
+| Element | Detail |
+|---|---|
+| **Ducking** | Down Arrow held = duck (wider/shorter rect). Release = stand. Grounded only. |
+| **Flying obstacle** | New obstacle type that must be ducked under, can't jump over |
+| **Obstacle types** | Ground (jump over) and flying (duck under) |
+| **Spawning rules** | Type-aware gaps to prevent impossible patterns |
+| **Animation** | Squash/stretch on jump/land, wiggle while running, dead pose |
+
+### Explicitly out of M1
+
+- No variable jump height (fixed jump + duck covers the two obstacle types)
+- No speed bonus for ducking (deferred to later milestone)
+- No sound, no particles
+
+### 1. Ducking Mechanic
+
+- **Input:** Down Arrow held = duck. Release = stand up.
+- **Player rect:** Standing 40x60 → Ducking 60x30 (wider, shorter).
+- **Hitbox:** Follows visual rect minus inset.
+- **Can't jump while ducking.** Must release Down first, then press Space/Up.
+- **Grounded only.** Can't duck mid-air.
+
+### 2. Flying Obstacle
+
+| Property | Ground obstacle | Flying obstacle |
+|---|---|---|
+| Size (WxH) | 30x50 | 40x35 |
+| Y position | On ground (`groundY - 50`) | Floating (`groundY - 70`) |
+| Avoid by | Jumping | Ducking |
+| Can jump over? | Yes | No -- extends high enough to catch jump arc |
+
+Flying obstacle bottom edge sits ~35px above ground. Clears a ducking player (30px tall) but hits a standing player (60px tall).
+
+### 3. Obstacle Spawning
+
+**Type selection:**
+- **Score < 1000:** Ground obstacles only. Player learns basics first.
+- **Score >= 1000:** Random mix -- 70% ground, 30% flying. Ground stays the default; flying is the curveball.
+
+**Type-aware minimum gap rules (prevents impossible patterns):**
+
+| Transition | Minimum gap | Reasoning |
+|---|---|---|
+| Ground → Ground | `MIN_GAP` (300px) | Same as M0 |
+| Flying → Flying | `MIN_GAP` (300px) | Stay ducking |
+| Ground → Flying | `TRANSITION_GAP` (500px) | Must land from jump + start duck |
+| Flying → Ground | `TRANSITION_GAP` (500px) | Must stand up + react + jump |
+
+At max speed (720 u/s), 500px = ~0.7s. Player airtime is ~0.84s, so landing happens with ~0.14s before the next obstacle. Tight but survivable.
+
+**Rule:** Never spawn ground and flying obstacles at overlapping X positions.
+
+`TRANSITION_GAP` is a tuning variable -- adjust based on playtesting.
+
+### 4. Animation (Squash & Stretch + Wiggle)
+
+All animation is rectangle deformation only. Bottom of rect stays anchored to ground (adjust `rect.y` when height changes).
+
+| State | Width | Height | Effect |
+|---|---|---|---|
+| **Running A** | 40 | 60 | Normal pose |
+| **Running B** | 42 | 58 | Wiggle pose (alternates with A every ~0.15s) |
+| **Jumping up** | 36 | 66 | Vertical stretch |
+| **Falling** | 44 | 54 | Horizontal squash |
+| **Landing** | 46 | 50 | Impact squash (3-4 frames, then back to running) |
+| **Ducking A** | 60 | 30 | Ducking normal |
+| **Ducking B** | 62 | 28 | Ducking wiggle |
+| **Dead** | 44 | 54 | Squashed, frozen |
+
+### 5. Data Structure Changes (M1 deltas from M0)
+
+```c
+#define OBS_GROUND 0
+#define OBS_FLYING 1
+
+typedef struct {
+    Rectangle rect;
+    bool active;
+    int type;           // OBS_GROUND or OBS_FLYING
+} Obstacle;
+
+typedef struct {
+    Rectangle rect;
+    float velocityY;
+    bool grounded;
+    bool ducking;       // currently holding down?
+    float animTimer;    // wiggle cycle timer
+    int animFrame;      // 0 or 1 (pose A/B)
+} Player;
+
+typedef struct {
+    // ... existing fields ...
+    int lastObstacleType;  // track previous type for gap rules
+} Game;
+```
+
+### 6. Variable Jump
+
+**Not in M1.** Fixed jump + duck covers the two obstacle types cleanly. Binary decision: see ground obstacle → jump, see flying obstacle → duck. Revisit if mid-height obstacles are added later.
+
 ## Decision Log
 
 ### 2026-02-09 -- Project approach
@@ -331,6 +437,15 @@ This means game logic must be refactored into a single `GameFrame()` function th
 - **C with structs** for M0. Maximise compatibility for future C++ migration.
 - C++ migration rules when the time comes: rename `.c` → `.cpp`, `cc` → `g++`/`em++`, add methods to structs.
 - C++ discipline: no inheritance hierarchies, no templates (except `std::vector` etc.), no exceptions, no smart pointers.
+
+### 2026-02-10 -- M1 design decisions
+- **Ducking:** Down Arrow held = wider/shorter rect (60x30). Grounded only. Can't jump while ducking.
+- **Flying obstacle:** 40x35, bottom edge ~35px above ground. Must duck, can't jump over.
+- **Spawning:** Ground only until score 1000, then 70/30 ground/flying mix.
+- **Type-aware gaps:** `TRANSITION_GAP` (500px) between different types to prevent impossible patterns. Same-type uses `MIN_GAP` (300px).
+- **Animation:** Squash/stretch + wiggle via rectangle deformation. No sprites, no new assets.
+- **No variable jump in M1.** Fixed jump + duck is sufficient for two obstacle types.
+- **No ducking speed bonus in M1.** Deferred to later milestone.
 
 ### 2026-02-09 -- Documentation structure
 - **CLAUDE.md** for repo conventions, build commands, technical context (how to work here).
