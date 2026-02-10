@@ -140,7 +140,32 @@ These are starting points. Final feel is determined during the tuning pass.
 
 **Language:** C with structs, written for easy C++ migration later (no `typedef` tricks, use C99/C11 features that overlap with C++).
 
-> TODO: struct definitions for Player, Obstacle, Game
+```c
+typedef struct {
+    Rectangle rect;      // position & size for drawing + collision
+    float velocityY;     // current vertical velocity
+    bool grounded;       // on the ground?
+} Player;
+
+typedef struct {
+    Rectangle rect;      // position & size
+    bool active;         // currently on screen?
+} Obstacle;
+
+#define MAX_OBSTACLES 3
+
+typedef struct {
+    int state;           // STATE_PLAYING or STATE_DEAD
+    int score;           // current run score (int, distance-based)
+    int highScore;       // best score, persisted
+    float deadTimer;     // time spent in DEAD state (for restart cooldown)
+    float obstacleSpeed; // current speed, increases with score
+    Obstacle obstacles[MAX_OBSTACLES]; // fixed-size circular buffer
+    int obstacleHead;    // index of next obstacle to spawn/recycle
+} Game;
+```
+
+**Obstacle buffer:** Fixed-size circular array (`MAX_OBSTACLES = 3`). When an obstacle scrolls off the left edge, recycle it to the right with new random spacing. `obstacleHead` tracks which slot to reuse next. No dynamic allocation.
 
 ### 5. Frame Loop
 
@@ -187,6 +212,11 @@ These are starting points. Final feel is determined during the tuning pass.
 - **Euler integration** for physics. Simple, sufficient for this game.
 - Gravity 1200 u/s², jump velocity -500 u/s as starting values, subject to tuning.
 - All physics frame-rate independent via `deltaTime`.
+
+### 2026-02-10 -- Data structures
+- Structs for Player, Obstacle, Game.
+- **Circular buffer** (fixed-size array, `MAX_OBSTACLES = 3`) for obstacles. No dynamic allocation.
+- **Int score** -- simple to display, no float-to-int casting needed.
 
 ### 2026-02-10 -- Language choice
 - **C with structs** for M0. Maximise compatibility for future C++ migration.
