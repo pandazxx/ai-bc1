@@ -169,23 +169,124 @@ typedef struct {
 
 ### 5. Frame Loop
 
-> TODO: per-state frame logic, input/update/render order
+Update-then-render. Player sees the result of this frame's input immediately.
+
+```
+Every frame:
+  1. deltaTime = GetFrameTime()
+  2. Input  (state-dependent)
+  3. Update (state-dependent)
+  4. Render (always runs)
+```
+
+**PLAYING frame:**
+
+| Phase | Actions |
+|---|---|
+| **Input** | Check Space/Up press → set `velocityY = jumpVelocity` if grounded |
+| **Update** | Apply gravity to player, move obstacles left, recycle off-screen obstacles, increment score, ramp `obstacleSpeed`, check collision → transition to DEAD |
+| **Render** | Draw ground, player rect, obstacle rects, score text |
+
+**DEAD frame:**
+
+| Phase | Actions |
+|---|---|
+| **Input** | Check Space/Up press → restart if `deadTimer >= 0.3s` |
+| **Update** | Increment `deadTimer` only. Everything else frozen. |
+| **Render** | Draw ground, player rect, obstacle rects (frozen), "Game Over" text, final score, high score |
 
 ### 6. Score & Difficulty
 
-> TODO: score formula, speed ramp curve, plateau behavior
+**Score:** Increments each frame by `1` while in PLAYING state. At 60 FPS, roughly 60 points per second. Simple, deterministic, no float math.
+
+**Difficulty ramp:**
+
+```
+obstacleSpeed = BASE_SPEED + (score * SPEED_INCREMENT)
+```
+
+| Constant | Starting value | Notes |
+|---|---|---|
+| `BASE_SPEED` | 360 u/s | Initial obstacle scroll speed |
+| `SPEED_INCREMENT` | 0.05 u/s per point | Speed gain per score point |
+| `MAX_SPEED` | 720 u/s | Hard cap, 2x base speed |
+
+At these values: max speed reached at score ~7200 (roughly 2 minutes of play). Subject to tuning.
+
+**Obstacle spacing:** When recycling an obstacle to the right edge, add a random gap between `MIN_GAP` and `MAX_GAP` (in pixels) beyond the screen width. Ensures the game is always survivable.
+
+| Constant | Starting value |
+|---|---|
+| `MIN_GAP` | 300 px |
+| `MAX_GAP` | 600 px |
 
 ### 7. High Score Storage
 
-> TODO: native file I/O, WebGL localStorage, error handling
+**Native (desktop):** Plain text file `highscore.dat` in working directory. Contains a single integer. Read on startup, write on death if score > highScore.
+
+```c
+// Save
+FILE *f = fopen("highscore.dat", "w");
+fprintf(f, "%d", highScore);
+fclose(f);
+
+// Load
+FILE *f = fopen("highscore.dat", "r");
+if (f) { fscanf(f, "%d", &highScore); fclose(f); }
+```
+
+**WebGL (Emscripten):** Use `emscripten_run_script()` to call `localStorage.setItem()` / `localStorage.getItem()`. Wrapped behind `#ifdef __EMSCRIPTEN__` preprocessor guard.
+
+**Error handling:** If file doesn't exist or read fails, high score defaults to 0. No crash, no error message. Silent fallback.
 
 ### 8. Rendering & Layout
 
-> TODO: draw order, screen positions, text placement, colors
+**Window:** 960x540 pixels, 60 FPS.
+
+**Draw order** (back to front):
+1. Clear background (`RAYWHITE`)
+2. Ground line at `y = screenHeight - 120`
+3. Obstacle rectangles (`DARKGRAY`)
+4. Player rectangle (`DARKGRAY`)
+5. Score text (top-right)
+6. Game Over overlay (DEAD state only, centered)
+
+**Player position:** Fixed X at `80px` from left edge. Y determined by physics.
+
+**Player size:** 40x60 px (width x height). Collision rect inset by ~2-4px for hitbox forgiveness.
+
+**Obstacle size:** 30x50 px (width x height). Sitting on the ground line.
+
+**Text layout:**
+
+| Text | Position | When |
+|---|---|---|
+| Score: `NNN` | Top-right, 20px padding | Always (PLAYING + DEAD) |
+| `Game Over` | Center screen | DEAD only |
+| `HI: NNN` | Below game over text | DEAD only |
+| `Press Space to Restart` | Below high score | DEAD only |
+
+All text uses Raylib default font. No custom fonts in M0.
 
 ### 9. WebGL Considerations
 
-> TODO: Emscripten main loop, build flags, localStorage API
+**Main loop:** Emscripten requires replacing the `while` loop with `emscripten_set_main_loop()`. Use `#ifdef __EMSCRIPTEN__` to switch between native and WebGL loop styles.
+
+```c
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(GameFrame, 60, 1);
+#else
+    while (!WindowShouldClose()) { GameFrame(); }
+#endif
+```
+
+This means game logic must be refactored into a single `GameFrame()` function that runs one frame, rather than a `while` loop in `main()`.
+
+**Build command:** `em++ main.c -o index.html -s USE_GLFW=3 -s ASYNCIFY -lraylib`
+
+**High score:** Uses `localStorage` via `emscripten_run_script()` behind `#ifdef __EMSCRIPTEN__` guard (see section 7).
+
+**Output:** `build/webgl/` directory containing `index.html`, `index.js`, `index.wasm`. Deployable to S3 as static files.
 
 ## Decision Log
 
@@ -212,6 +313,14 @@ typedef struct {
 - **Euler integration** for physics. Simple, sufficient for this game.
 - Gravity 1200 u/s², jump velocity -500 u/s as starting values, subject to tuning.
 - All physics frame-rate independent via `deltaTime`.
+
+### 2026-02-10 -- Low-level design (topics 5-9)
+- **Frame loop:** Update-then-render order. State-dependent input and update, render always runs.
+- **Score:** Int, +1 per frame. Difficulty ramp: linear speed increase capped at 2x base speed.
+- **Obstacle spacing:** Random gap between MIN_GAP (300px) and MAX_GAP (600px).
+- **High score:** File I/O on native, localStorage on WebGL. Silent fallback to 0 on error.
+- **Rendering:** Back-to-front draw order. Default font. Player at fixed X=80px. Hitbox inset for forgiveness.
+- **WebGL:** `emscripten_set_main_loop()` with `GameFrame()` function. `#ifdef __EMSCRIPTEN__` guards.
 
 ### 2026-02-10 -- Data structures
 - Structs for Player, Obstacle, Game.
