@@ -138,25 +138,27 @@ These are starting points. Final feel is determined during the tuning pass.
 
 ### 4. Data Structures
 
-> TODO: structs vs loose variables, what fields each needs
+**Language:** C with structs, written for easy C++ migration later (no `typedef` tricks, use C99/C11 features that overlap with C++).
 
-### 4. Frame Loop
+> TODO: struct definitions for Player, Obstacle, Game
+
+### 5. Frame Loop
 
 > TODO: per-state frame logic, input/update/render order
 
-### 5. Score & Difficulty
+### 6. Score & Difficulty
 
 > TODO: score formula, speed ramp curve, plateau behavior
 
-### 6. High Score Storage
+### 7. High Score Storage
 
 > TODO: native file I/O, WebGL localStorage, error handling
 
-### 7. Rendering & Layout
+### 8. Rendering & Layout
 
 > TODO: draw order, screen positions, text placement, colors
 
-### 8. WebGL Considerations
+### 9. WebGL Considerations
 
 > TODO: Emscripten main loop, build flags, localStorage API
 
@@ -185,6 +187,11 @@ These are starting points. Final feel is determined during the tuning pass.
 - **Euler integration** for physics. Simple, sufficient for this game.
 - Gravity 1200 u/s², jump velocity -500 u/s as starting values, subject to tuning.
 - All physics frame-rate independent via `deltaTime`.
+
+### 2026-02-10 -- Language choice
+- **C with structs** for M0. Maximise compatibility for future C++ migration.
+- C++ migration rules when the time comes: rename `.c` → `.cpp`, `cc` → `g++`/`em++`, add methods to structs.
+- C++ discipline: no inheritance hierarchies, no templates (except `std::vector` etc.), no exceptions, no smart pointers.
 
 ### 2026-02-09 -- Documentation structure
 - **CLAUDE.md** for repo conventions, build commands, technical context (how to work here).
