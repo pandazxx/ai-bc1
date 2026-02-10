@@ -15,7 +15,7 @@ A Chrome offline dinosaur game clone built with Raylib -- simple, tight, and fun
 | Milestone | Theme | Scope |
 |---|---|---|
 | **M0** | The Loop | Core run/jump/die/retry, score, high score save, difficulty ramp, WebGL build |
-| **M1** | Depth | Ducking + flying obstacles, 2 obstacle types |
+| **M1** | Depth | Ducking + flying obstacles, 2 obstacle types, squash/stretch + wiggle animation |
 | **M2** | Juice | Particles, screen shake, day/night cycle, sound effects |
 | **M3** | Progression | Milestones, combo scoring, death stats screen |
 | **M4** | Modes | Pause menu, challenge mode or time trial |
