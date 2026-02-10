@@ -1,0 +1,7 @@
+# Build artifacts
+dino_runner
+test_placeholder
+build/
+
+# High score data
+highscore.dat
