@@ -24,8 +24,26 @@ jobs:
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
 
+      - name: Verify Emscripten
+        run: |
+          emcc --version
+          echo "EMSDK=$EMSDK"
+
+      - name: Build Raylib for web
+        run: |
+          git clone --depth 1 https://github.com/raysan5/raylib.git /tmp/raylib
+          cd /tmp/raylib/src
+          make PLATFORM=PLATFORM_WEB EMSDK_PATH=$EMSDK -j$(nproc)
+
       - name: Build WebGL package
-        run: scripts/build_webgl.sh build/webgl
+        run: |
+          mkdir -p build/webgl
+          emcc main.c -o build/webgl/index.html \
+            -I/tmp/raylib/src \
+            -L/tmp/raylib/src \
+            -s USE_GLFW=3 \
+            -s ASYNCIFY \
+            -lraylib -lm
 
       - name: Upload WebGL artifact
         uses: actions/upload-artifact@v4
