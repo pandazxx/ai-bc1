@@ -27,25 +27,29 @@ RAYLIB_LIB="$RAYLIB_SRC/src/libraylib.a"
 
 if [ ! -f "$RAYLIB_LIB" ]; then
   echo "Building Raylib for web platform..."
-  git clone --depth 1 https://github.com/raysan5/raylib.git "$RAYLIB_SRC"
+  git clone --depth 1 --branch 5.0 https://github.com/raysan5/raylib.git "$RAYLIB_SRC"
   cd "$RAYLIB_SRC/src"
-  make PLATFORM=PLATFORM_WEB -j$(nproc 2>/dev/null || echo 2)
+  emcc -c rcore.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2
+  emcc -c rshapes.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2
+  emcc -c rtextures.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2
+  emcc -c rtext.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2
+  emcc -c rmodels.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2
+  emcc -c utils.c -Os -Wall -DPLATFORM_WEB
+  emcc -c raudio.c -Os -Wall -DPLATFORM_WEB
+  emar rcs libraylib.a rcore.o rshapes.o rtextures.o rtext.o rmodels.o utils.o raudio.o
   cd - > /dev/null
+  echo "Raylib built: $RAYLIB_LIB"
 fi
 
 echo "Building WebGL package..."
 emcc main.c -o "$OUTPUT_DIR/index.html" \
   -I"$RAYLIB_SRC/src" \
   -L"$RAYLIB_SRC/src" \
+  -Os -Wall \
   -s USE_GLFW=3 \
   -s ASYNCIFY \
-  -lraylib -lm \
-  --shell-file "$RAYLIB_SRC/src/minshell.html" 2>/dev/null \
-  || emcc main.c -o "$OUTPUT_DIR/index.html" \
-    -I"$RAYLIB_SRC/src" \
-    -L"$RAYLIB_SRC/src" \
-    -s USE_GLFW=3 \
-    -s ASYNCIFY \
-    -lraylib -lm
+  -s TOTAL_MEMORY=67108864 \
+  -DPLATFORM_WEB \
+  -lraylib
 
 echo "WebGL build complete: $OUTPUT_DIR/"

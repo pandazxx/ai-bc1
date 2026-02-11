@@ -23,17 +23,29 @@ jobs:
 
       - name: Setup Emscripten
         uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: 3.1.51
 
       - name: Verify Emscripten
         run: |
           emcc --version
           echo "EMSDK=$EMSDK"
+          which emcc
 
       - name: Build Raylib for web
         run: |
-          git clone --depth 1 https://github.com/raysan5/raylib.git /tmp/raylib
+          git clone --depth 1 --branch 5.0 https://github.com/raysan5/raylib.git /tmp/raylib
           cd /tmp/raylib/src
-          make PLATFORM=PLATFORM_WEB EMSDK_PATH=$EMSDK -j$(nproc)
+          emcc -c rcore.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2
+          emcc -c rshapes.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2
+          emcc -c rtextures.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2
+          emcc -c rtext.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2
+          emcc -c rmodels.c -Os -Wall -DPLATFORM_WEB -DGRAPHICS_API_OPENGL_ES2
+          emcc -c utils.c -Os -Wall -DPLATFORM_WEB
+          emcc -c raudio.c -Os -Wall -DPLATFORM_WEB
+          emar rcs libraylib.a rcore.o rshapes.o rtextures.o rtext.o rmodels.o utils.o raudio.o
+          echo "Raylib built successfully"
+          ls -la libraylib.a
 
       - name: Build WebGL package
         run: |
@@ -41,9 +53,14 @@ jobs:
           emcc main.c -o build/webgl/index.html \
             -I/tmp/raylib/src \
             -L/tmp/raylib/src \
+            -Os -Wall \
             -s USE_GLFW=3 \
             -s ASYNCIFY \
-            -lraylib -lm
+            -s TOTAL_MEMORY=67108864 \
+            -DPLATFORM_WEB \
+            -lraylib
+          echo "WebGL build complete"
+          ls -la build/webgl/
 
       - name: Upload WebGL artifact
         uses: actions/upload-artifact@v4
