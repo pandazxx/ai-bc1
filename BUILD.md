@@ -121,28 +121,24 @@ aws s3api put-public-access-block \
 
 Then add a bucket policy for public read:
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Sid": "PublicReadGetObject",
-      "Effect": "Allow",
-      "Principal": "*",
-      "Action": "s3:GetObject",
-      "Resource": "arn:aws:s3:::your-dino-runner-bucket/*"
-    }
-  ]
-}
-```
-
-Apply it:
-
 ```sh
 aws s3api put-bucket-policy \
   --bucket your-dino-runner-bucket \
-  --policy file://bucket-policy.json
+  --policy '{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "PublicReadGetObject",
+        "Effect": "Allow",
+        "Principal": "*",
+        "Action": "s3:GetObject",
+        "Resource": "arn:aws:s3:::your-dino-runner-bucket/*"
+      }
+    ]
+  }'
 ```
+
+Replace `your-dino-runner-bucket` with your actual bucket name.
 
 ### Step 4: Create an IAM User for CI/CD
 
@@ -155,35 +151,33 @@ aws iam create-access-key --user-name dino-runner-ci
 # Save the AccessKeyId and SecretAccessKey from the output
 ```
 
-Attach a minimal policy (create as `ci-policy.json`):
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "s3:PutObject",
-        "s3:GetObject",
-        "s3:ListBucket",
-        "s3:DeleteObject"
-      ],
-      "Resource": [
-        "arn:aws:s3:::your-dino-runner-bucket",
-        "arn:aws:s3:::your-dino-runner-bucket/*"
-      ]
-    }
-  ]
-}
-```
+Attach a minimal policy:
 
 ```sh
 aws iam put-user-policy \
   --user-name dino-runner-ci \
   --policy-name S3DeployPolicy \
-  --policy-document file://ci-policy.json
+  --policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Effect": "Allow",
+        "Action": [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:DeleteObject"
+        ],
+        "Resource": [
+          "arn:aws:s3:::your-dino-runner-bucket",
+          "arn:aws:s3:::your-dino-runner-bucket/*"
+        ]
+      }
+    ]
+  }'
 ```
+
+Replace `your-dino-runner-bucket` with your actual bucket name.
 
 ### Step 5: Configure GitHub Secrets
 
