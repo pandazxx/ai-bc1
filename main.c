@@ -163,8 +163,8 @@ static void SpawnObstacle(Obstacle *obs, float startX, int type)
     else /* OBS_FLYING */
     {
         obs->rect.width = 40.0f;
-        obs->rect.height = 35.0f;
-        obs->rect.y = groundY - 70.0f;
+        obs->rect.height = 145.0f;
+        obs->rect.y = groundY - 180.0f;
     }
 }
 

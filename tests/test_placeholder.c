@@ -135,8 +135,8 @@ static void test_flying_obstacle_clearance(void)
 {
     float groundY = SCREEN_HEIGHT - 120.0f;
 
-    /* Flying obstacle bottom edge at groundY - 70 + 35 = groundY - 35 */
-    float flyingBottom = (groundY - 70.0f) + 35.0f;
+    /* Flying obstacle: top at groundY-180, height 145, bottom at groundY-35 */
+    float flyingBottom = (groundY - 180.0f) + 145.0f;
     /* = groundY - 35 */
 
     /* Ducking player top edge: groundY - 30 (duck height) */
@@ -158,29 +158,19 @@ static void test_flying_not_jumpable(void)
 {
     float groundY = SCREEN_HEIGHT - 120.0f;
 
-    /* Flying obstacle top edge at groundY - 70 */
-    float flyingTop = groundY - 70.0f;
+    /* Flying obstacle top edge at groundY - 180 */
+    float flyingTop = groundY - 180.0f;
 
-    /* Player top at apex should still be BELOW flying obstacle top?
-       Actually the flying obstacle extends from groundY-70 to groundY-35.
-       At apex the player's rect goes from (groundY - 60 - 104) to (groundY - 104).
-       Player bottom at apex = groundY - 104 = 316. Flying bottom = groundY - 35 = 385.
-       Player is above the flying obstacle at apex, BUT the obstacle is 40px wide
-       and the player passes through its vertical range during ascent/descent.
-       The key is that the flying obstacle's top (groundY-70 = 350) is below
-       the player's bottom at apex (316), so the player IS above it at apex.
-       But during ascent and descent the player passes through the obstacle's
-       Y range. With the obstacle's width and the player's horizontal position
-       being fixed, the player would collide during the passing phase.
-       This makes jumping over flying obstacles unreliable -- which is the
-       desired behavior. The safe action is to duck. */
+    /* Player bottom at jump apex: groundY - jumpHeight = groundY - 104
+       Player top at apex (with jump stretch, height 66): groundY - 104 - 66 = groundY - 170
+       Flying obstacle top at groundY - 180, which is ABOVE the player's top at apex.
+       So the player is always inside the obstacle's Y range during the jump. */
+    float playerTopAtApex = groundY - 104.0f - 66.0f; /* groundY - 170 */
 
-    /* Verify flying obstacle top is within the jump arc range */
-    float playerBottomAtApex = groundY - 104.0f;
-    assert(playerBottomAtApex < flyingTop);
-    /* Player clears at apex, but collides during ascent/descent -- intended */
+    /* Flying obstacle top must be above player top at apex */
+    assert(flyingTop < playerTopAtApex);
 
-    printf("  flying not reliably jumpable: OK\n");
+    printf("  flying not jumpable: OK\n");
 }
 
 static void test_spawn_threshold(void)

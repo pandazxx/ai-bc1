@@ -320,12 +320,12 @@ This means game logic must be refactored into a single `GameFrame()` function th
 
 | Property | Ground obstacle | Flying obstacle |
 |---|---|---|
-| Size (WxH) | 30x50 | 40x35 |
-| Y position | On ground (`groundY - 50`) | Floating (`groundY - 70`) |
+| Size (WxH) | 30x50 | 40x145 |
+| Y position | On ground (`groundY - 50`) | Top at `groundY - 180`, bottom at `groundY - 35` |
 | Avoid by | Jumping | Ducking |
-| Can jump over? | Yes | No -- extends high enough to catch jump arc |
+| Can jump over? | Yes | No -- extends above jump apex (player top at apex ~`groundY - 170`) |
 
-Flying obstacle bottom edge sits ~35px above ground. Clears a ducking player (30px tall) but hits a standing player (60px tall).
+Flying obstacle extends from `groundY - 180` (above jump apex) down to `groundY - 35` (35px above ground). Ducking player (30px tall) fits under the 35px gap. Standing or jumping player always collides.
 
 ### 3. Obstacle Spawning
 
