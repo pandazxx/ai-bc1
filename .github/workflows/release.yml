@@ -93,4 +93,6 @@ jobs:
 
       - name: Sync WebGL build to S3
         if: env.S3_BUCKET != ''
-        run: aws s3 sync build/webgl "s3://${S3_BUCKET}/"
+        run: |
+          TAG_FOLDER="${GITHUB_REF#refs/tags/release/}"
+          aws s3 sync build/webgl "s3://${S3_BUCKET}/${TAG_FOLDER}/"
