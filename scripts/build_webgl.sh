@@ -49,6 +49,7 @@ emcc main.c -o "$OUTPUT_DIR/index.html" \
   -s USE_GLFW=3 \
   -s ASYNCIFY \
   -s TOTAL_MEMORY=67108864 \
+  -s GL_ENABLE_GET_PROC_ADDRESS \
   -DPLATFORM_WEB \
   -lraylib
 
