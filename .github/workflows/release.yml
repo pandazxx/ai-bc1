@@ -91,6 +91,10 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Extract version from tag
+        id: version
+        run: echo "folder=${GITHUB_REF#refs/tags/release/}" >> "$GITHUB_OUTPUT"
+
       - name: Sync WebGL build to S3
         if: env.S3_BUCKET != ''
-        run: aws s3 sync build/webgl "s3://${S3_BUCKET}/"
+        run: aws s3 sync build/webgl "s3://${S3_BUCKET}/${{ steps.version.outputs.folder }}/"
