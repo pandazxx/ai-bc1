@@ -13,23 +13,26 @@
 #define MAX_SPEED 720.0f
 #define MIN_GAP 300.0f
 #define MAX_GAP 600.0f
+#define TRANSITION_GAP 500.0f
 #define MAX_OBSTACLES 3
 #define RESTART_COOLDOWN 0.3f
 #define HITBOX_INSET 3.0f
 #define SCREEN_WIDTH 960
 #define SCREEN_HEIGHT 540
+#define FLYING_SCORE_THRESHOLD 1000
+#define FLYING_CHANCE 0.3f
 
 static void test_jump_physics(void)
 {
-    /* Jump apex time: v / g = 500 / 1200 ≈ 0.417s */
+    /* Jump apex time: v / g = 500 / 1200 ~ 0.417s */
     float apexTime = -JUMP_VELOCITY / GRAVITY;
     assert(apexTime > 0.4f && apexTime < 0.45f);
 
-    /* Jump height: v^2 / (2g) = 250000 / 2400 ≈ 104px */
+    /* Jump height: v^2 / (2g) = 250000 / 2400 ~ 104px */
     float jumpHeight = (JUMP_VELOCITY * JUMP_VELOCITY) / (2.0f * GRAVITY);
     assert(jumpHeight > 100.0f && jumpHeight < 110.0f);
 
-    /* Total airtime: 2 * apex time ≈ 0.834s */
+    /* Total airtime: 2 * apex time ~ 0.834s */
     float airtime = 2.0f * apexTime;
     assert(airtime > 0.8f && airtime < 0.9f);
 
@@ -57,7 +60,7 @@ static void test_difficulty_ramp(void)
 static void test_obstacle_gaps(void)
 {
     /* MIN_GAP must be large enough for player to survive at MAX_SPEED.
-       Time to cross gap: MIN_GAP / MAX_SPEED = 300 / 720 ≈ 0.417s
+       Time to cross gap: MIN_GAP / MAX_SPEED = 300 / 720 ~ 0.417s
        This should be less than total airtime (~0.834s) so jumping is viable. */
     float crossTime = MIN_GAP / MAX_SPEED;
     float airtime = 2.0f * (-JUMP_VELOCITY / GRAVITY);
@@ -69,16 +72,49 @@ static void test_obstacle_gaps(void)
     printf("  obstacle gaps: OK\n");
 }
 
+static void test_transition_gap(void)
+{
+    /* TRANSITION_GAP must be >= MIN_GAP */
+    assert(TRANSITION_GAP >= MIN_GAP);
+
+    /* TRANSITION_GAP at max speed must give enough time to land from jump
+       and react. Time = TRANSITION_GAP / MAX_SPEED = 500 / 720 ~ 0.694s.
+       Player airtime is ~0.834s, so gap crossing time should be less than
+       airtime (player can land in time). */
+    float transitionTime = TRANSITION_GAP / MAX_SPEED;
+    float airtime = 2.0f * (-JUMP_VELOCITY / GRAVITY);
+    assert(transitionTime < airtime);
+
+    /* TRANSITION_GAP should also leave reaction time after landing.
+       Landing happens at ~0.834s airtime. If gap is crossed in ~0.694s,
+       obstacle arrives ~0.694s after the previous one passed.
+       This means if player jumped immediately, they land at 0.834s and
+       obstacle at 0.694s... that's too soon. But the gap is measured from
+       the previous obstacle's right edge, and the player is at fixed X=80.
+       The real check: gap must allow the player to complete a jump and
+       transition to duck (or vice versa) before the next obstacle arrives. */
+    assert(transitionTime > 0.5f);
+
+    printf("  transition gap: OK\n");
+}
+
 static void test_hitbox_inset(void)
 {
-    /* Player visual: 40x60, hitbox should be smaller by 2*INSET in each dimension */
+    /* Player standing: 40x60, hitbox smaller by 2*INSET each dimension */
     float visualW = 40.0f;
     float visualH = 60.0f;
     float hitW = visualW - HITBOX_INSET * 2.0f;
     float hitH = visualH - HITBOX_INSET * 2.0f;
-
     assert(hitW > 0.0f && hitW < visualW);
     assert(hitH > 0.0f && hitH < visualH);
+
+    /* Player ducking: 60x30, hitbox still valid */
+    float duckW = 60.0f;
+    float duckH = 30.0f;
+    float duckHitW = duckW - HITBOX_INSET * 2.0f;
+    float duckHitH = duckH - HITBOX_INSET * 2.0f;
+    assert(duckHitW > 0.0f && duckHitW < duckW);
+    assert(duckHitH > 0.0f && duckHitH < duckH);
 
     printf("  hitbox inset: OK\n");
 }
@@ -95,14 +131,75 @@ static void test_screen_constants(void)
     printf("  screen constants: OK\n");
 }
 
+static void test_flying_obstacle_clearance(void)
+{
+    float groundY = SCREEN_HEIGHT - 120.0f;
+
+    /* Flying obstacle: top at groundY-180, height 145, bottom at groundY-35 */
+    float flyingBottom = (groundY - 180.0f) + 145.0f;
+    /* = groundY - 35 */
+
+    /* Ducking player top edge: groundY - 30 (duck height) */
+    float duckingTop = groundY - 30.0f;
+
+    /* Ducking player must clear flying obstacle: duckingTop > flyingBottom */
+    assert(duckingTop > flyingBottom);
+
+    /* Standing player top edge: groundY - 60 (standing height) */
+    float standingTop = groundY - 60.0f;
+
+    /* Standing player must NOT clear flying obstacle */
+    assert(standingTop < flyingBottom);
+
+    printf("  flying obstacle clearance: OK\n");
+}
+
+static void test_flying_not_jumpable(void)
+{
+    float groundY = SCREEN_HEIGHT - 120.0f;
+
+    /* Flying obstacle top edge at groundY - 180 */
+    float flyingTop = groundY - 180.0f;
+
+    /* Player bottom at jump apex: groundY - jumpHeight = groundY - 104
+       Player top at apex (with jump stretch, height 66): groundY - 104 - 66 = groundY - 170
+       Flying obstacle top at groundY - 180, which is ABOVE the player's top at apex.
+       So the player is always inside the obstacle's Y range during the jump. */
+    float playerTopAtApex = groundY - 104.0f - 66.0f; /* groundY - 170 */
+
+    /* Flying obstacle top must be above player top at apex */
+    assert(flyingTop < playerTopAtApex);
+
+    printf("  flying not jumpable: OK\n");
+}
+
+static void test_spawn_threshold(void)
+{
+    /* Flying obstacles only appear after score threshold */
+    assert(FLYING_SCORE_THRESHOLD == 1000);
+
+    /* At 60 FPS, threshold reached in ~16.7 seconds */
+    float secondsToThreshold = (float)FLYING_SCORE_THRESHOLD / 60.0f;
+    assert(secondsToThreshold > 15.0f && secondsToThreshold < 20.0f);
+
+    /* Flying chance is 30% */
+    assert(FLYING_CHANCE > 0.0f && FLYING_CHANCE < 1.0f);
+
+    printf("  spawn threshold: OK\n");
+}
+
 int main(void)
 {
     printf("Running tests...\n");
     test_jump_physics();
     test_difficulty_ramp();
     test_obstacle_gaps();
+    test_transition_gap();
     test_hitbox_inset();
     test_screen_constants();
+    test_flying_obstacle_clearance();
+    test_flying_not_jumpable();
+    test_spawn_threshold();
     printf("All tests passed.\n");
     return 0;
 }

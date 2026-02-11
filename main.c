@@ -22,6 +22,7 @@
 
 #define MIN_GAP 300.0f
 #define MAX_GAP 600.0f
+#define TRANSITION_GAP 500.0f
 
 #define MAX_OBSTACLES 3
 
@@ -29,10 +30,30 @@
 
 #define HITBOX_INSET 3.0f
 
+#define FLYING_SCORE_THRESHOLD 1000
+#define FLYING_CHANCE 0.3f
+
+#define WIGGLE_INTERVAL 0.15f
+#define LANDING_FRAMES 4
+
 /* --- Game States --- */
 
 #define STATE_PLAYING 0
 #define STATE_DEAD 1
+
+/* --- Obstacle Types --- */
+
+#define OBS_GROUND 0
+#define OBS_FLYING 1
+
+/* --- Player Animation States --- */
+
+#define ANIM_RUNNING 0
+#define ANIM_JUMPING 1
+#define ANIM_FALLING 2
+#define ANIM_LANDING 3
+#define ANIM_DUCKING 4
+#define ANIM_DEAD 5
 
 /* --- Data Structures --- */
 
@@ -40,11 +61,17 @@ typedef struct {
     Rectangle rect;
     float velocityY;
     bool grounded;
+    bool ducking;
+    int animState;
+    float animTimer;
+    int animFrame;
+    int landingCounter;
 } Player;
 
 typedef struct {
     Rectangle rect;
     bool active;
+    int type;
 } Obstacle;
 
 typedef struct {
@@ -55,6 +82,7 @@ typedef struct {
     float obstacleSpeed;
     Obstacle obstacles[MAX_OBSTACLES];
     int obstacleHead;
+    int lastObstacleType;
 } Game;
 
 /* --- Globals (needed for Emscripten main loop) --- */
@@ -104,29 +132,108 @@ static void SaveHighScore(void)
 
 /* --- Obstacle Management --- */
 
-static float RandomGap(void)
+static float RandomGap(int prevType, int nextType)
 {
-    return MIN_GAP + (float)rand() / (float)RAND_MAX * (MAX_GAP - MIN_GAP);
+    float minGap = (prevType != nextType) ? TRANSITION_GAP : MIN_GAP;
+    return minGap + (float)rand() / (float)RAND_MAX * (MAX_GAP - minGap);
 }
 
-static void SpawnObstacle(Obstacle *obs, float startX)
+static int ChooseObstacleType(void)
 {
+    if (game.score < FLYING_SCORE_THRESHOLD)
+    {
+        return OBS_GROUND;
+    }
+    float roll = (float)rand() / (float)RAND_MAX;
+    return (roll < FLYING_CHANCE) ? OBS_FLYING : OBS_GROUND;
+}
+
+static void SpawnObstacle(Obstacle *obs, float startX, int type)
+{
+    obs->type = type;
     obs->rect.x = startX;
-    obs->rect.y = groundY - 50.0f;
-    obs->rect.width = 30.0f;
-    obs->rect.height = 50.0f;
     obs->active = true;
+
+    if (type == OBS_GROUND)
+    {
+        obs->rect.width = 30.0f;
+        obs->rect.height = 50.0f;
+        obs->rect.y = groundY - obs->rect.height;
+    }
+    else /* OBS_FLYING */
+    {
+        obs->rect.width = 40.0f;
+        obs->rect.height = 145.0f;
+        obs->rect.y = groundY - 180.0f;
+    }
 }
 
 static void InitObstacles(void)
 {
-    float x = SCREEN_WIDTH + RandomGap();
+    int prevType = OBS_GROUND;
+    float x = SCREEN_WIDTH + RandomGap(prevType, OBS_GROUND);
     for (int i = 0; i < MAX_OBSTACLES; i++)
     {
-        SpawnObstacle(&game.obstacles[i], x);
-        x += RandomGap();
+        int type = OBS_GROUND; /* All ground at start */
+        SpawnObstacle(&game.obstacles[i], x, type);
+        prevType = type;
+        int nextType = OBS_GROUND;
+        x += RandomGap(prevType, nextType);
     }
     game.obstacleHead = 0;
+    game.lastObstacleType = OBS_GROUND;
+}
+
+/* --- Animation --- */
+
+static void UpdatePlayerVisual(void)
+{
+    float baseW, baseH;
+
+    switch (player.animState)
+    {
+    case ANIM_RUNNING:
+        if (player.animFrame == 0)
+        {
+            baseW = 40.0f; baseH = 60.0f;
+        }
+        else
+        {
+            baseW = 42.0f; baseH = 58.0f;
+        }
+        break;
+    case ANIM_JUMPING:
+        baseW = 36.0f; baseH = 66.0f;
+        break;
+    case ANIM_FALLING:
+        baseW = 44.0f; baseH = 54.0f;
+        break;
+    case ANIM_LANDING:
+        baseW = 46.0f; baseH = 50.0f;
+        break;
+    case ANIM_DUCKING:
+        if (player.animFrame == 0)
+        {
+            baseW = 60.0f; baseH = 30.0f;
+        }
+        else
+        {
+            baseW = 62.0f; baseH = 28.0f;
+        }
+        break;
+    case ANIM_DEAD:
+        baseW = 44.0f; baseH = 54.0f;
+        break;
+    default:
+        baseW = 40.0f; baseH = 60.0f;
+        break;
+    }
+
+    /* Anchor bottom edge to current Y position */
+    float bottom = player.rect.y + player.rect.height;
+    player.rect.width = baseW;
+    player.rect.height = baseH;
+    player.rect.y = bottom - baseH;
 }
 
 /* --- Game Reset --- */
@@ -144,6 +251,11 @@ static void ResetGame(void)
     player.rect.height = 60.0f;
     player.velocityY = 0.0f;
     player.grounded = true;
+    player.ducking = false;
+    player.animState = ANIM_RUNNING;
+    player.animTimer = 0.0f;
+    player.animFrame = 0;
+    player.landingCounter = 0;
 
     InitObstacles();
 }
@@ -178,10 +290,26 @@ static void GameFrame(void)
     /* --- Input --- */
     if (game.state == STATE_PLAYING)
     {
-        if (player.grounded && (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_UP)))
+        /* Ducking: hold Down Arrow while grounded */
+        if (player.grounded)
+        {
+            if (IsKeyDown(KEY_DOWN))
+            {
+                player.ducking = true;
+            }
+            else
+            {
+                player.ducking = false;
+            }
+        }
+
+        /* Jump: only when grounded and not ducking */
+        if (player.grounded && !player.ducking &&
+            (IsKeyPressed(KEY_SPACE) || IsKeyPressed(KEY_UP)))
         {
             player.velocityY = JUMP_VELOCITY;
             player.grounded = false;
+            player.ducking = false;
         }
     }
     else /* STATE_DEAD */
@@ -197,15 +325,59 @@ static void GameFrame(void)
     if (game.state == STATE_PLAYING)
     {
         /* Player physics */
-        player.velocityY += GRAVITY * deltaTime;
-        player.rect.y += player.velocityY * deltaTime;
-
-        if (player.rect.y >= groundY - player.rect.height)
+        if (!player.grounded)
         {
-            player.rect.y = groundY - player.rect.height;
-            player.velocityY = 0.0f;
-            player.grounded = true;
+            player.velocityY += GRAVITY * deltaTime;
+            player.rect.y += player.velocityY * deltaTime;
+
+            if (player.rect.y >= groundY - player.rect.height)
+            {
+                player.rect.y = groundY - player.rect.height;
+                player.velocityY = 0.0f;
+                player.grounded = true;
+                player.landingCounter = LANDING_FRAMES;
+            }
         }
+
+        /* Animation state machine */
+        if (game.state == STATE_PLAYING)
+        {
+            if (!player.grounded)
+            {
+                player.animState = (player.velocityY < 0.0f) ? ANIM_JUMPING : ANIM_FALLING;
+                player.animFrame = 0;
+            }
+            else if (player.landingCounter > 0)
+            {
+                player.animState = ANIM_LANDING;
+                player.landingCounter--;
+                if (player.landingCounter == 0)
+                {
+                    player.animState = player.ducking ? ANIM_DUCKING : ANIM_RUNNING;
+                }
+            }
+            else if (player.ducking)
+            {
+                player.animState = ANIM_DUCKING;
+            }
+            else
+            {
+                player.animState = ANIM_RUNNING;
+            }
+
+            /* Wiggle timer for running and ducking */
+            if (player.animState == ANIM_RUNNING || player.animState == ANIM_DUCKING)
+            {
+                player.animTimer += deltaTime;
+                if (player.animTimer >= WIGGLE_INTERVAL)
+                {
+                    player.animTimer -= WIGGLE_INTERVAL;
+                    player.animFrame = 1 - player.animFrame;
+                }
+            }
+        }
+
+        UpdatePlayerVisual();
 
         /* Move obstacles */
         for (int i = 0; i < MAX_OBSTACLES; i++)
@@ -219,15 +391,21 @@ static void GameFrame(void)
                 {
                     /* Find rightmost obstacle to place after it */
                     float rightmost = 0.0f;
+                    int rightmostType = game.lastObstacleType;
                     for (int j = 0; j < MAX_OBSTACLES; j++)
                     {
                         float right = game.obstacles[j].rect.x + game.obstacles[j].rect.width;
                         if (right > rightmost)
                         {
                             rightmost = right;
+                            rightmostType = game.obstacles[j].type;
                         }
                     }
-                    SpawnObstacle(&game.obstacles[i], rightmost + RandomGap());
+
+                    int newType = ChooseObstacleType();
+                    float gap = RandomGap(rightmostType, newType);
+                    SpawnObstacle(&game.obstacles[i], rightmost + gap, newType);
+                    game.lastObstacleType = newType;
                 }
             }
         }
@@ -247,6 +425,8 @@ static void GameFrame(void)
         {
             game.state = STATE_DEAD;
             game.deadTimer = 0.0f;
+            player.animState = ANIM_DEAD;
+            UpdatePlayerVisual();
             if (game.score > game.highScore)
             {
                 game.highScore = game.score;
@@ -271,7 +451,8 @@ static void GameFrame(void)
     {
         if (game.obstacles[i].active)
         {
-            DrawRectangleRec(game.obstacles[i].rect, DARKGRAY);
+            Color obsColor = (game.obstacles[i].type == OBS_FLYING) ? MAROON : DARKGRAY;
+            DrawRectangleRec(game.obstacles[i].rect, obsColor);
         }
     }
 
